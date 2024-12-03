@@ -1,0 +1,56 @@
+/* TemperatureDashboard.css */
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #3a7bd5, #00d2ff); /* Sleek gradient background */
+    color: #333;
+    height: 100vh;
+}
+
+.dashboard-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    height: 100%; /* Full height */
+}
+
+.dashboard-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.dashboard-header h1 {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #fff;
+    margin: 0;
+}
+
+.dashboard-header p {
+    font-size: 1.2rem;
+    color: #f3f3f3;
+    margin: 5px 0 20px;
+}
+
+.chart-card {
+    background: #ffffff; /* Clean white card */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); /* Professional shadow */
+    border-radius: 15px;
+    padding: 20px;
+    width: 90%;
+    max-width: 900px; /* Wider maximum width for professional look */
+    height: 450px; /* Increased chart height */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.loading-text {
+    font-size: 1.5rem;
+    color: #666;
+    text-align: center;
+}
