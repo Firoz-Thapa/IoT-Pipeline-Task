@@ -1,65 +1,120 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const Influx = require('influx');
-const cors = require('cors');
-
-const app = express();
-const PORT = 3001;
-
-// Middleware
-app.use(bodyParser.json());
-app.use(cors());
+import express from 'express';
+import { createServer } from 'http';
+import { WebSocketServer } from 'ws';
+import { InfluxDB, Point } from '@influxdata/influxdb-client';
 
 // InfluxDB Configuration
-const influx = new Influx.InfluxDB({
-    host: 'localhost',
-    database: 'iot_data',
-    schema: [
-        {
-            measurement: 'temperature_readings',
-            fields: {
-                temperature: Influx.FieldType.FLOAT,
-                humidity: Influx.FieldType.FLOAT,
-            },
-            tags: ['device'],
-        },
-    ],
+const url = 'http://localhost:8086';
+const token = 'XCatDggVjAP3fISlHktNZHvZ51M-pnKHpvD34r4S7G5GytF5Fy_cUr4jxftUzE2UVv4o2nccSzXxasIiruwEMA==';
+const org = 'LAB';
+const bucket = 'plant-monitoring-system';
+
+const client = new InfluxDB({ url, token });
+const writeApi = client.getWriteApi(org, bucket);
+const queryApi = client.getQueryApi(org);
+
+// Express App and Server Setup
+const app = express();
+const server = createServer(app);
+
+// WebSocket Server Setup
+const wss = new WebSocketServer({ server });
+
+// Data Arrays to Store Recent Readings
+const temperatureReadings = [];
+const humidityReadings = [];
+
+// Function to Write Dummy Data to InfluxDB
+function writeDummyData() {
+  const temperature = Math.random() * 40; // Random temperature (0-40°C)
+  const humidity = Math.random() * 100; // Random humidity (0-100%)
+  const timestamp = new Date();
+
+  // Write temperature to InfluxDB
+  const tempPoint = new Point('temperature')
+    .floatField('value', temperature)
+    .timestamp(timestamp);
+
+  writeApi.writePoint(tempPoint);
+  console.log(`[INFO] Wrote temperature data: ${temperature.toFixed(2)}°C`);
+
+  // Write humidity to InfluxDB
+  const humidityPoint = new Point('humidity')
+    .floatField('value', humidity)
+    .timestamp(timestamp);
+
+  writeApi.writePoint(humidityPoint);
+  console.log(`[INFO] Wrote humidity data: ${humidity.toFixed(2)}%`);
+
+  // Update Recent Readings Arrays
+  temperatureReadings.push({ timestamp, value: temperature });
+  humidityReadings.push({ timestamp, value: humidity });
+
+  // Keep Only the Last 10 Readings
+  if (temperatureReadings.length > 10) temperatureReadings.shift();
+  if (humidityReadings.length > 10) humidityReadings.shift();
+}
+
+// Function to Query Sensor Data from InfluxDB
+async function getSensorData(sensorType) {
+  const fluxQuery = `
+    from(bucket:"${bucket}")
+      |> range(start: -1h)
+      |> filter(fn: (r) => r._measurement == "${sensorType}")
+      |> last()
+  `;
+
+  try {
+    const result = await queryApi.collectRows(fluxQuery);
+    return result.map(row => ({
+      timestamp: row._time,
+      value: row._value,
+    }));
+  } catch (error) {
+    console.error(`[ERROR] Query failed for ${sensorType}:`, error.message);
+    return [];
+  }
+}
+
+// WebSocket Connection Handler
+wss.on('connection', (ws) => {
+  console.log('[INFO] New client connected.');
+
+  // Send Initial Data to Connected Client
+  ws.send(JSON.stringify({ temperature: temperatureReadings, humidity: humidityReadings }));
+
+  ws.on('close', () => {
+    console.log('[INFO] Client disconnected.');
+  });
+
+  ws.on('error', (error) => {
+    console.error('[ERROR] WebSocket error:', error.message);
+  });
 });
 
-// Ensure the database exists
-influx.getDatabaseNames().then((names) => {
-    if (!names.includes('iot_data')) {
-        return influx.createDatabase('iot_data');
+// Broadcast Updated Data to All Connected Clients
+function broadcastData() {
+  const payload = JSON.stringify({ temperature: temperatureReadings, humidity: humidityReadings });
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(payload);
     }
+  });
+}
+
+// Set Interval to Generate and Broadcast Dummy Data
+setInterval(() => {
+  writeDummyData();
+  broadcastData();
+}, 5000);
+
+// Express Route for Health Check
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'Server is running' });
 });
 
-// API Endpoint to receive data
-app.post('/data', (req, res) => {
-    const { temperature, humidity } = req.body;
-    if (temperature === undefined || humidity === undefined) {
-        return res.status(400).send('Invalid data');
-    }
-
-    influx
-        .writePoints([
-            {
-                measurement: 'temperature_readings',
-                tags: { device: 'raspberry-pi' },
-                fields: { temperature, humidity },
-            },
-        ])
-        .then(() => res.status(200).send('Data stored successfully'))
-        .catch((err) => res.status(500).send(err.message));
-});
-
-// API Endpoint to fetch data
-app.get('/data', (req, res) => {
-    influx
-        .query('SELECT * FROM temperature_readings ORDER BY time DESC LIMIT 20')
-        .then((results) => res.status(200).json(results))
-        .catch((err) => res.status(500).send(err.message));
-});
-
-app.listen(PORT, () => {
-    console.log(`Backend running on http://localhost:${PORT}`);
+// Start the Server
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`[INFO] Server is running on port ${PORT}`);
 });

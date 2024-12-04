@@ -1,37 +1,40 @@
 import machine
 import dht
-import urequests
 import time
+import urequests
 
-# Setup sensor and Wi-Fi
-sensor = dht.DHT22(machine.Pin(15))  # Use GPIO15 for DHT data pin
-wifi_ssid = 'Your_SSID'
-wifi_password = 'Your_PASSWORD'
-server_url = 'http://<your-server-ip>:80/data'
+# DHT22 Sensor Setup (GPIO Pin 15)
+dht_sensor = dht.DHT22(machine.Pin(15))
 
-def connect_wifi():
-    import network
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    wlan.connect(wifi_ssid, wifi_password)
-    while not wlan.isconnected():
-        pass
-    print('Connected to WiFi:', wlan.ifconfig())
+# Backend API Configuration
+BACKEND_URL = "http://<your_backend_ip>:3001/api/data"
 
-def send_data(temp, humidity):
-    data = {'temperature': temp, 'humidity': humidity}
-    response = urequests.post(server_url, json=data)
-    print('Data sent:', response.text)
-
-# Main loop
-connect_wifi()
-while True:
+def read_sensors():
     try:
-        sensor.measure()
-        temp = sensor.temperature()
-        humidity = sensor.humidity()
-        print(f'Temp: {temp}, Humidity: {humidity}')
-        send_data(temp, humidity)
-        time.sleep(60)  # Send data every minute
+        # Read temperature and humidity from DHT22
+        dht_sensor.measure()
+        temperature = dht_sensor.temperature()
+        humidity = dht_sensor.humidity()
+
+        return {
+            "temperature": temperature,
+            "humidity": humidity
+        }
     except Exception as e:
-        print('Error:', e)
+        print("Error reading sensor:", e)
+        return None
+
+def send_data_to_backend(data):
+    try:
+        response = urequests.post(BACKEND_URL, json=data)
+        print("Data sent to backend:", response.text)
+    except Exception as e:
+        print("Error sending data to backend:", e)
+
+# Main Loop
+while True:
+    sensor_data = read_sensors()
+    if sensor_data:
+        print("Sensor Data:", sensor_data)
+        send_data_to_backend(sensor_data)
+    time.sleep(5)  # Wait 5 seconds before the next reading
