@@ -97,7 +97,7 @@ sudo systemctl enable influxdb
 ### 6. 📊 Dashboard Preview
 
 ![Screenshot (1)](https://github.com/user-attachments/assets/8507001b-aa1c-4f8e-b615-d02fda10ce1c)
-
+Link to the Demonstration of the Monitoring System : (https://youtu.be/05swBRCxRfc)
 The dashboard displays: 
 - Real-Time Temperature and Humidity Data with graphs.
 - Historical data for the past hour.
